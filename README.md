@@ -16,8 +16,10 @@ Preferably, you can create multiple tables for different scopes and purposes, e.
 ### Libraries in R
 
 The following libraries are needed in R,
+
 bigrquery, googleAnalyticsR, lubridate,
 dplyr, progress, purrr, curl
+
 and are installed with the command 
 ```R
 install.packages("bigrquery")
