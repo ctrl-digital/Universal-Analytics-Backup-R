@@ -1,4 +1,4 @@
-# Universal Analytics to BigQueryexport.
+# Universal Analytics to BigQuery export.
 
 ## Description
 Run this R script to export Universal Analytics data to Google BigQuery. It will not be a comprehensive (include-all) backup. Instead, you have to define your wanted dimensions & metrics.
