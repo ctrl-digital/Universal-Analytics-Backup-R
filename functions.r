@@ -7,71 +7,53 @@ split_date_range <- function(start_date, end_date, interval = "1 months") {
   return(intervals)
 }
 
-fetch_ga_data <- function(start_date, end_date, ga_id, pb, metrics, dimensions) {
+fetch_ga_data <- function(start_date, end_date, ga_id, metrics, dimensions) {
   df <- google_analytics(
     ga_id,
     date_range = c(start_date, end_date),
     metrics = metrics,
     dimensions = dimensions,
-    anti_sample = TRUE)
+    anti_sample = TRUE
+  )
   
   return(df)
 }
 
 fetch_and_cache_data <- function(table_name, metrics, dimensions, date_intervals, ga_id, pb, start_date, end_date) {
-  cached_data <- list()  # Assuming cached_data should eventually be a dataframe
-  last_fetched_date <- NULL
+  # Initialize an empty dataframe to hold cached data
+  cached_data <- data.frame()
+  last_fetched_date <- NULL # Initialize last_fetched_date before the loop
   
   for (i in 1:nrow(date_intervals)) {
     interval_start <- as.character(date_intervals$start[i])
     interval_end <- as.character(date_intervals$end[i])
     
-    # Check if there is cached data and if the last date is valid
-    if (!is_empty(cached_data) && !is.null(cached_data$date) && length(cached_data$date) > 0) {
-      last_cached_date <- as.Date(tail(cached_data$date, 1))
+    # Only fetch new data if cache is empty or interval is beyond last fetched date
+    if (is.null(last_fetched_date) || as.Date(interval_end) > as.Date(last_fetched_date)) {
+      cat("Fetching data for", table_name, ":", interval_start, "to", interval_end, "\n")
       
-      # Ensure last_cached_date is not NA before comparison
-      if (!is.na(last_cached_date) && as.Date(interval_start) <= last_cached_date) {
-        cached_rows_count <- nrow(cached_data)
-        unique_rows_count <- length(unique(cached_data$date))
-        missing_rows_count <- cached_rows_count - unique_rows_count
-        
-        if (missing_rows_count > 0) {
-          cat("Fetching missing rows for", table_name, ":", interval_start, "to", interval_end, "(", missing_rows_count, "missing rows)\n")
-        }
-        next
+      table_data <- fetch_ga_data(
+        interval_start, interval_end, ga_id,
+        metrics, dimensions
+      )
+      
+      # Combine new data with cached data
+      cached_data <- rbind(cached_data, table_data)
+      
+      # Update last fetched date to the end of the current interval
+      last_fetched_date <- interval_end
+      
+      if (!is.null(pb)) {
+        pb$tick()
       }
     }
-    
-    # Fetch data for the current interval
-    table_data <- fetch_ga_data(
-      interval_start, interval_end, ga_id, pb,
-      metrics, dimensions
-    )
-    
-    # Assuming table_data is a dataframe; append it to cached_data
-    if (is_empty(cached_data)) {
-      cached_data <- table_data
-    } else {
-      cached_data <- rbind(cached_data, table_data)
-    }
-    
-    last_fetched_date <- interval_end
-    
-    if (!is.null(pb)) pb$tick()
   }
   
   return(cached_data)
 }
 
-# Helper function to check if a list or dataframe is empty
-is_empty <- function(x) {
-  return(length(x) == 0 || all(sapply(x, is.null)))
-}
 
-
-
-upload_to_bq_in_batches <- function(df, table_name, billing_project_id, dataset_id, batch_size = 2000000) {
+upload_to_bq_in_batches <- function(df, table_name, billing_project_id, dataset_id, batch_size = 200000) {
   n_batches <- ceiling(nrow(df) / batch_size)
   for (i in 1:n_batches) {
     start_row <- ((i-1) * batch_size) + 1
